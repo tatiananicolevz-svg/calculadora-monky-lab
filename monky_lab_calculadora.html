@@ -1,0 +1,1506 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Calculadora de Margen — Monky Agency</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root { color-scheme: light; }
+  html, body { margin: 0; background: #F5F5F7; }
+  #root { min-height: 100vh; }
+  * { -webkit-font-smoothing: antialiased; }
+  input[type=number] { font-variant-numeric: tabular-nums; }
+  input[type=number]::-webkit-outer-spin-button,
+  input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number] { -moz-appearance: textfield; }
+</style>
+</head>
+<body>
+<div id="gate" style="
+  position: fixed; inset: 0; z-index: 9999;
+  background: #F5F5F7;
+  display: flex; align-items: center; justify-content: center;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif;
+  padding: 24px;
+">
+  <form id="gate-form" style="
+    width: 100%; max-width: 340px;
+    background: #FFFFFF;
+    border: 1px solid #E5E5EA;
+    border-radius: 20px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.04);
+    padding: 32px 28px;
+    text-align: center;
+  ">
+    <div style="
+      width: 44px; height: 44px; margin: 0 auto 18px;
+      border-radius: 12px; background: #EDF5F1;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    ">🔒</div>
+    <h1 style="margin: 0 0 6px; font-size: 17px; font-weight: 600; color: #1D1D1F; letter-spacing: -0.01em;">
+      Calculadora de Margen
+    </h1>
+    <p style="margin: 0 0 20px; font-size: 13px; color: #86868B; line-height: 1.5;">
+      Herramienta interna de Monky Agency. Ingresá la clave del equipo para continuar.
+    </p>
+    <input
+      id="gate-input"
+      type="password"
+      autocomplete="off"
+      placeholder="Contraseña"
+      style="
+        width: 100%; box-sizing: border-box;
+        padding: 11px 14px; margin-bottom: 12px;
+        border: 1px solid #E5E5EA; border-radius: 12px;
+        background: #FBFBFD; font-size: 15px; color: #1D1D1F;
+        outline: none; text-align: center;
+      "
+    />
+    <button type="submit" style="
+      width: 100%; padding: 11px 14px;
+      border: none; border-radius: 999px;
+      background: #1F6F58; color: #fff;
+      font-size: 14px; font-weight: 500; cursor: pointer;
+    ">Entrar</button>
+    <p id="gate-error" style="display:none; margin: 12px 0 0; font-size: 12px; color: #C1432B;">
+      Contraseña incorrecta. Probá de nuevo.
+    </p>
+  </form>
+</div>
+<script>
+(function () {
+  // Hash SHA-256 de la clave del equipo — la clave en texto plano no
+  // queda guardada en el código fuente de la página.
+  var PASS_HASH = "5dd057b487143b5964978ce4fb525dce5cc2eb73b3a97de81d0fcf860e4856ef";
+  var UNLOCK_KEY = "monky_calc_unlocked";
+
+  function sha256Hex(text) {
+    var enc = new TextEncoder().encode(text);
+    return crypto.subtle.digest("SHA-256", enc).then(function (buf) {
+      return Array.prototype.map
+        .call(new Uint8Array(buf), function (b) { return b.toString(16).padStart(2, "0"); })
+        .join("");
+    });
+  }
+
+  function unlock() {
+    var gate = document.getElementById("gate");
+    if (gate) gate.style.display = "none";
+  }
+
+  // Si ya se desbloqueó antes en este navegador, no volver a pedir clave.
+  try {
+    if (localStorage.getItem(UNLOCK_KEY) === "1") unlock();
+  } catch (e) {}
+
+  var form = document.getElementById("gate-form");
+  var input = document.getElementById("gate-input");
+  var error = document.getElementById("gate-error");
+
+  if (form) {
+    form.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      sha256Hex(input.value || "").then(function (hash) {
+        if (hash === PASS_HASH) {
+          try { localStorage.setItem(UNLOCK_KEY, "1"); } catch (e) {}
+          unlock();
+        } else {
+          error.style.display = "block";
+          input.value = "";
+          input.focus();
+        }
+      });
+    });
+  }
+})();
+</script>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useMemo, useEffect } = React;
+
+
+const colors = {
+  bg: "#F5F5F7",
+  surface: "#FFFFFF",
+  surfaceMuted: "#FBFBFD",
+  border: "#E5E5EA",
+  ink: "#1D1D1F",
+  sub: "#86868B",
+  teal: "#1F6F58",
+  tealSoft: "#EDF5F1",
+  terracotta: "#C1432B",
+  terracottaSoft: "#FBECE8",
+  amber: "#B07A1E",
+  amberSoft: "#FBF2E1",
+};
+
+const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif';
+const MONO = 'ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace';
+const SHADOW = "0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.04)";
+
+const fmtARS = (n) =>
+  new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    maximumFractionDigits: 0,
+  }).format(Number.isFinite(n) ? n : 0);
+
+const fmtPct = (n) => `${Number.isFinite(n) ? n.toFixed(1) : "0.0"}%`;
+const fmtRoas = (n) => `${Number.isFinite(n) ? n.toFixed(2) : "0.00"}x`;
+
+// Línea de resultado en rojo: siempre visible debajo de cada casillero de costo.
+function CostResult({ text }) {
+  if (!text) return null;
+  return (
+    <div
+      className="mt-1.5 text-[13px] font-medium rounded-lg px-2.5 py-1.5"
+      style={{ color: colors.terracotta, backgroundColor: colors.terracottaSoft }}
+    >
+      − {text}
+    </div>
+  );
+}
+
+function NumField({ label, value, onChange, hint, readOnly, unit = "$", resultText }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-[13px] font-medium" style={{ color: colors.ink }}>
+        {label}
+      </span>
+      <div
+        className="flex items-center gap-2 rounded-xl px-3.5 py-2.5 transition-shadow focus-within:ring-2"
+        style={{
+          backgroundColor: readOnly ? colors.bg : colors.surfaceMuted,
+          border: `1px solid ${colors.border}`,
+          "--tw-ring-color": `${colors.teal}55`,
+        }}
+      >
+        {unit === "$" && <span style={{ color: colors.sub }}>$</span>}
+        <input
+          type="number"
+          value={Number.isFinite(value) ? value : 0}
+          readOnly={readOnly}
+          onChange={(e) => onChange && onChange(parseFloat(e.target.value) || 0)}
+          className="w-full bg-transparent outline-none text-right"
+          style={{
+            fontFamily: MONO,
+            color: colors.ink,
+          }}
+        />
+        {unit === "%" && <span style={{ color: colors.sub }}>%</span>}
+        {unit === "x" && <span style={{ color: colors.sub }}>x</span>}
+      </div>
+      <CostResult text={resultText} />
+      {hint && (
+        <span className="text-xs leading-snug" style={{ color: colors.sub }}>
+          {hint}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function Stat({ label, value, tone = "ink", big }) {
+  const toneColor =
+    tone === "teal" ? colors.teal : tone === "terracotta" ? colors.terracotta : tone === "amber" ? colors.amber : colors.ink;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-[13px]" style={{ color: colors.sub }}>
+        {label}
+      </span>
+      <span
+        className={big ? "text-[28px]" : "text-lg"}
+        style={{
+          fontFamily: MONO,
+          color: toneColor,
+          fontWeight: 600,
+          letterSpacing: "-0.01em",
+        }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+// Caja de resultado (label + valor grande), con fondo de color — misma idea
+// que el resumen de arriba de todo, para que cualquier resultado importante
+// se lea de un vistazo.
+function StatBox({ label, value, tone = "ink" }) {
+  const bg =
+    tone === "teal" ? colors.tealSoft : tone === "terracotta" ? colors.terracottaSoft : tone === "amber" ? colors.amberSoft : colors.bg;
+  const fg = tone === "teal" ? colors.teal : tone === "terracotta" ? colors.terracotta : tone === "amber" ? colors.amber : colors.ink;
+  return (
+    <div className="rounded-xl px-3.5 py-2.5" style={{ backgroundColor: bg }}>
+      <div className="text-[11px]" style={{ color: colors.sub }}>
+        {label}
+      </div>
+      <div
+        className="text-sm font-semibold mt-0.5"
+        style={{ fontFamily: MONO, color: fg }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function SectionHeader({ n, title, desc }) {
+  return (
+    <div className="flex items-start gap-3 mb-6">
+      <div
+        className="flex items-center justify-center rounded-full shrink-0"
+        style={{
+          width: 26,
+          height: 26,
+          backgroundColor: colors.tealSoft,
+          color: colors.teal,
+          fontSize: 12,
+          fontWeight: 600,
+          marginTop: 2,
+        }}
+      >
+        {n}
+      </div>
+      <div>
+        <h2
+          className="text-[19px]"
+          style={{ fontFamily: FONT, color: colors.ink, fontWeight: 600, letterSpacing: "-0.01em" }}
+        >
+          {title}
+        </h2>
+        {desc && (
+          <p className="text-[13px] mt-1 leading-relaxed max-w-md" style={{ color: colors.sub }}>
+            {desc}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SubLabel({ children }) {
+  return (
+    <p className="text-[13px] font-medium mb-3 mt-7 first:mt-0" style={{ color: colors.ink }}>
+      {children}
+    </p>
+  );
+}
+
+function BreakEvenApp() {
+  const [cliente, setCliente] = useState("");
+  const [ticket, setTicket] = useState(14000);
+
+  // --- Capacidades de la plataforma (db compartida + descargas) ---
+  // Dentro de claude.ai usa las capacidades reales (guardado compartido por
+  // todo el equipo). Fuera de claude.ai (por ejemplo publicada en GitHub
+  // Pages) no existen, así que cae automáticamente a un "db" local basado
+  // en localStorage: sigue funcionando, pero guarda por navegador, no
+  // compartido entre compañeros.
+  const makeLocalDb = () => {
+    const STORAGE_KEY = "monky_calc_clientes_local";
+    const readAll = () => {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+      } catch (e) {
+        return {};
+      }
+    };
+    const writeAll = (all) => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+    };
+    return {
+      collection: () => ({
+        get: async () => {
+          const all = readAll();
+          return {
+            docs: Object.keys(all).map((id) => ({ id, data: () => all[id] })),
+          };
+        },
+        doc: (id) => ({
+          set: async (data) => {
+            const all = readAll();
+            all[id] = data;
+            writeAll(all);
+          },
+          get: async () => {
+            const all = readAll();
+            const exists = Object.prototype.hasOwnProperty.call(all, id);
+            return { exists, data: () => all[id] };
+          },
+        }),
+      }),
+    };
+  };
+
+  const [dbApi, setDbApi] = useState(null);
+  const [downloadsApi, setDownloadsApi] = useState(null);
+  const [dbIsLocal, setDbIsLocal] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const db = (window.claude && window.claude.use) ? await window.claude.use("db") : null;
+        if (cancelled) return;
+        if (db) {
+          setDbApi(db);
+        } else {
+          setDbApi(makeLocalDb());
+          setDbIsLocal(true);
+        }
+      } catch (e) {
+        console.error("db no disponible, usando localStorage", e);
+        if (!cancelled) {
+          setDbApi(makeLocalDb());
+          setDbIsLocal(true);
+        }
+      }
+      try {
+        const dl = (window.claude && window.claude.use) ? await window.claude.use("downloads") : null;
+        if (!cancelled) setDownloadsApi(dl);
+      } catch (e) {
+        console.error("downloads no disponible", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // --- Comisiones (% del ticket, IVA automático) ---
+  const [comisionPasarelaPct, setComisionPasarelaPct] = useState(0);
+  const [comisionCuotasPct, setComisionCuotasPct] = useState(0);
+  const [usaTiendaNube, setUsaTiendaNube] = useState(false);
+
+  const comisionPasarelaARS = ticket * (comisionPasarelaPct / 100);
+  const ivaComisionPasarela = comisionPasarelaARS * 0.21;
+  const totalPasarela = comisionPasarelaARS + ivaComisionPasarela;
+
+  const comisionCuotasARS = ticket * (comisionCuotasPct / 100);
+  const ivaCuotas = comisionCuotasARS * 0.21;
+  const totalCuotas = comisionCuotasARS + ivaCuotas;
+
+  const comisionTiendaNube = usaTiendaNube ? ticket * 0.02 : 0;
+  const impuestos = ticket * 0.045;
+
+  // --- Producto: ¿cuánto se le marca? ---
+  const [markupMode, setMarkupMode] = useState("multiplo"); // 'multiplo' | 'porcentaje'
+  const [multiplicador, setMultiplicador] = useState(2.5);
+  const [markupPct, setMarkupPct] = useState(150);
+
+  const costoProducto =
+    markupMode === "multiplo"
+      ? multiplicador > 0
+        ? ticket / multiplicador
+        : 0
+      : markupPct > -100
+      ? ticket / (1 + markupPct / 100)
+      : 0;
+
+  // --- Otros costos por venta ---
+  const [packaging, setPackaging] = useState(0);
+  const [envio, setEnvio] = useState(0);
+  const [costoPorCompra, setCostoPorCompra] = useState(0);
+
+  const costosVariablesTotal =
+    comisionPasarelaARS +
+    ivaComisionPasarela +
+    comisionCuotasARS +
+    ivaCuotas +
+    comisionTiendaNube +
+    impuestos +
+    costoProducto +
+    packaging +
+    envio +
+    costoPorCompra;
+
+  const ganancia = ticket - costosVariablesTotal;
+  const margenPct = ticket > 0 ? (ganancia / ticket) * 100 : 0;
+  const costoPorCompraBreakeven = costoPorCompra + ganancia;
+
+  // --- Paso 2: escenario break even mensual ---
+  const [costosFijos, setCostosFijos] = useState(0);
+
+  const ventasNecesarias =
+    costosFijos > 0 && margenPct > 0
+      ? Math.ceil(costosFijos / (ticket * (margenPct / 100)))
+      : 0;
+  const facturacionMinima = margenPct > 0 ? costosFijos / (margenPct / 100) : 0;
+  const roasMinimo = margenPct > 0 ? 1 / (margenPct / 100) : 0;
+
+  // --- Paso 3: escenarios de objetivo (manejados por ROAS) ---
+  const [ventasMin, setVentasMin] = useState(90);
+  const [roasMin, setRoasMin] = useState(3);
+  const [ventasIdeal, setVentasIdeal] = useState(90);
+  const [roasIdeal, setRoasIdeal] = useState(5);
+
+  const scenario = (ventas, roas) => {
+    const facturacion = ventas * ticket;
+    const inversion = roas > 0 ? facturacion / roas : 0;
+    const inversionDiaria = inversion / 30.42;
+    const cpa = ventas > 0 ? inversion / ventas : 0;
+    return { facturacion, inversion, inversionDiaria, roas, cpa };
+  };
+
+  const min = useMemo(() => scenario(ventasMin, roasMin), [ventasMin, roasMin, ticket]);
+  const ideal = useMemo(() => scenario(ventasIdeal, roasIdeal), [ventasIdeal, roasIdeal, ticket]);
+
+  // --- Guardado por cliente (compartido con todo el equipo, vía db) ---
+  const [savedClients, setSavedClients] = useState([]); // [{id, nombre}]
+  const [statusMsg, setStatusMsg] = useState("");
+
+  const slugify = (s) =>
+    s
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9_\-.~:@+]/g, "_")
+      .slice(0, 190) || "cliente";
+
+  const refreshClientList = async () => {
+    if (!dbApi) return;
+    try {
+      const snap = await dbApi.collection("clientes").get();
+      setSavedClients(
+        snap.docs.map((d) => ({ id: d.id, nombre: (d.data() && d.data().nombre) || d.id }))
+      );
+    } catch (e) {
+      console.error("No se pudo listar clientes guardados", e);
+    }
+  };
+
+  useEffect(() => {
+    if (dbApi) refreshClientList();
+  }, [dbApi]);
+
+  const handleGuardar = async () => {
+    if (!cliente.trim()) {
+      setStatusMsg("Poné un nombre de cliente antes de guardar.");
+      return;
+    }
+    if (!dbApi) {
+      setStatusMsg("El guardado no está disponible en esta vista.");
+      return;
+    }
+    const data = {
+      nombre: cliente.trim(),
+      ticket,
+      comisionPasarelaPct,
+      comisionCuotasPct,
+      usaTiendaNube,
+      markupMode,
+      multiplicador,
+      markupPct,
+      packaging,
+      envio,
+      costoPorCompra,
+      costosFijos,
+      ventasMin,
+      roasMin,
+      ventasIdeal,
+      roasIdeal,
+    };
+    try {
+      await dbApi.collection("clientes").doc(slugify(cliente)).set(data);
+      setStatusMsg(`Guardado: ${cliente.trim()}`);
+      refreshClientList();
+    } catch (e) {
+      console.error(e);
+      setStatusMsg("No se pudo guardar. Probá de nuevo.");
+    }
+  };
+
+  const handleCargar = async (id) => {
+    if (!dbApi) return;
+    try {
+      const snap = await dbApi.collection("clientes").doc(id).get();
+      if (snap.exists) {
+        const data = snap.data();
+        setCliente(data.nombre ?? id);
+        setTicket(data.ticket ?? 0);
+        setComisionPasarelaPct(data.comisionPasarelaPct ?? 0);
+        setComisionCuotasPct(data.comisionCuotasPct ?? 0);
+        setUsaTiendaNube(!!data.usaTiendaNube);
+        setMarkupMode(data.markupMode ?? "multiplo");
+        setMultiplicador(data.multiplicador ?? 2.5);
+        setMarkupPct(data.markupPct ?? 150);
+        setPackaging(data.packaging ?? 0);
+        setEnvio(data.envio ?? 0);
+        setCostoPorCompra(data.costoPorCompra ?? 0);
+        setCostosFijos(data.costosFijos ?? 0);
+        setVentasMin(data.ventasMin ?? 90);
+        setRoasMin(data.roasMin ?? 3);
+        setVentasIdeal(data.ventasIdeal ?? 90);
+        setRoasIdeal(data.roasIdeal ?? 5);
+        setStatusMsg(`Cargado: ${data.nombre ?? id}`);
+      }
+    } catch (e) {
+      console.error(e);
+      setStatusMsg("No se pudo cargar ese cliente.");
+    }
+  };
+
+  // --- Exportar a PDF ---
+  // Arma un PDF real dibujando el reporte en un <canvas> con el mismo look
+  // de la app. Primero hace una pasada de "medición" (sobre un canvas de
+  // 2x2, sin costo) para saber cuántas páginas hacen falta, y recién ahí
+  // crea el canvas final con el tamaño justo — un canvas más grande de lo
+  // necesario queda en blanco en varios navegadores/dispositivos, que es lo
+  // que estaba pasando antes.
+  const roundRectPath = (ctx, x, y, w, h, r) => {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  };
+
+  const drawFieldCard = (ctx, x, y, w, label, value, opts = {}) => {
+    ctx.fillStyle = colors.ink;
+    ctx.font = "9px system-ui, sans-serif";
+    ctx.fillText(label, x, y + 8);
+    const boxY = y + 13;
+    const boxH = 20;
+    roundRectPath(ctx, x, boxY, w, boxH, 4);
+    ctx.fillStyle = opts.readOnly ? colors.bg : "#FFFFFF";
+    ctx.fill();
+    ctx.strokeStyle = colors.border;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = colors.ink;
+    ctx.font = "10px ui-monospace, Menlo, monospace";
+    ctx.textAlign = "right";
+    ctx.fillText(String(value), x + w - 8, boxY + 14);
+    ctx.textAlign = "left";
+    let bottom = boxY + boxH;
+    if (opts.badge) {
+      const badgeY = bottom + 4;
+      const badgeH = 17;
+      roundRectPath(ctx, x, badgeY, w, badgeH, 4);
+      ctx.fillStyle = colors.terracottaSoft;
+      ctx.fill();
+      ctx.fillStyle = colors.terracotta;
+      ctx.font = "bold 8px system-ui, sans-serif";
+      ctx.fillText(`\u2212 ${opts.badge}`, x + 6, badgeY + 11.5);
+      bottom = badgeY + badgeH;
+    }
+    return bottom;
+  };
+
+  const PAGE_W = 595.28;
+  const PAGE_H = 841.89;
+
+  // Dibuja TODO el reporte sobre el ctx que le pasen (puede ser un canvas
+  // real o uno de 2x2 solo para medir) y devuelve cuántas páginas ocupa.
+  const renderReport = (ctx) => {
+    const marginX = 40;
+    const contentW = PAGE_W - marginX * 2;
+    let y = 40;
+    let pageTop = 0;
+    const bottomMargin = 34;
+    const topMargin = 40;
+
+    const ensureSpace = (h) => {
+      if (y - pageTop + h > PAGE_H - bottomMargin) {
+        pageTop += PAGE_H;
+        y = pageTop + topMargin;
+      }
+    };
+
+    ctx.fillStyle = colors.ink;
+    ctx.font = "bold 22px -apple-system, system-ui, sans-serif";
+    ctx.fillText("Calculadora de Margen", marginX, y);
+    y += 16;
+    ctx.font = "10px system-ui, sans-serif";
+    ctx.fillStyle = colors.sub;
+    ctx.fillText(
+      `Cliente: ${cliente || "—"}   ·   Generado el ${new Date().toLocaleDateString("es-AR")}`,
+      marginX,
+      y
+    );
+    y += 24;
+
+    const boxGap = 10;
+    const boxW = (contentW - boxGap * 3) / 4;
+    const boxH = 52;
+    ensureSpace(boxH);
+    const boxBg = margenSano ? colors.tealSoft : colors.terracottaSoft;
+    const boxFg = margenSano ? colors.teal : colors.terracotta;
+    [
+      ["MARGEN DE GANANCIA", fmtPct(margenPct)],
+      ["ROAS MÍNIMO", fmtRoas(roasMinimo)],
+      ["VENTAS MÍNIMAS / MES", String(ventasNecesarias)],
+      ["FACTURACIÓN MÍNIMA", fmtARS(facturacionMinima)],
+    ].forEach(([label, val], i) => {
+      const x = marginX + i * (boxW + boxGap);
+      roundRectPath(ctx, x, y, boxW, boxH, 8);
+      ctx.fillStyle = boxBg;
+      ctx.fill();
+      ctx.fillStyle = colors.sub;
+      ctx.font = "7.5px system-ui, sans-serif";
+      ctx.fillText(label, x + 10, y + 18);
+      ctx.fillStyle = boxFg;
+      ctx.font = "bold 15px ui-monospace, Menlo, monospace";
+      ctx.fillText(val, x + 10, y + 38);
+    });
+    y += boxH + 26;
+
+    const sectionHeader = (n, title) => {
+      ensureSpace(60);
+      ctx.fillStyle = colors.teal;
+      ctx.beginPath();
+      ctx.arc(marginX + 7, y + 2, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#FFFFFF";
+      ctx.font = "bold 8px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(String(n), marginX + 7, y + 5);
+      ctx.textAlign = "left";
+      ctx.fillStyle = colors.ink;
+      ctx.font = "bold 14px -apple-system, system-ui, sans-serif";
+      ctx.fillText(title, marginX + 22, y + 6);
+      y += 24;
+    };
+
+    // ---- Sección 1 ----
+    sectionHeader(1, "Margen por venta");
+    ensureSpace(52);
+    y = drawFieldCard(ctx, marginX, y, 220, "Ticket promedio", fmtARS(ticket)) + 16;
+
+    ctx.fillStyle = colors.sub;
+    ctx.font = "bold 8px system-ui, sans-serif";
+    ctx.fillText("COMISIONES (EL IVA SE SUMA SOLO)", marginX, y);
+    y += 10;
+
+    ensureSpace(60);
+    const halfW = (contentW - 16) / 2;
+    const yA = drawFieldCard(ctx, marginX, y, halfW, "Comisión pasarela de pago", `${comisionPasarelaPct}%`, {
+      badge: `${fmtARS(totalPasarela)} (comisión + IVA)`,
+    });
+    const yB = drawFieldCard(
+      ctx,
+      marginX + halfW + 16,
+      y,
+      halfW,
+      "Comisión cuotas sin interés",
+      `${comisionCuotasPct}%`,
+      { badge: `${fmtARS(totalCuotas)} (comisión + IVA)` }
+    );
+    y = Math.max(yA, yB) + 16;
+
+    ensureSpace(22);
+    ctx.fillStyle = colors.ink;
+    ctx.font = "9px system-ui, sans-serif";
+    ctx.fillText("Comisión Tienda Nube (2%)", marginX, y);
+    ctx.font = "bold 9px system-ui, sans-serif";
+    ctx.fillStyle = usaTiendaNube ? colors.terracotta : colors.sub;
+    ctx.textAlign = "right";
+    ctx.fillText(
+      usaTiendaNube ? `\u2212 ${fmtARS(comisionTiendaNube)}` : "No aplica (usa Pago Nube)",
+      PAGE_W - marginX,
+      y
+    );
+    ctx.textAlign = "left";
+    y += 22;
+
+    const prodBoxH = 88;
+    ensureSpace(prodBoxH);
+    const prodBoxY = y;
+    roundRectPath(ctx, marginX, prodBoxY, contentW, prodBoxH, 8);
+    ctx.fillStyle = colors.surfaceMuted;
+    ctx.fill();
+    ctx.strokeStyle = colors.border;
+    ctx.stroke();
+    let py = prodBoxY + 18;
+    ctx.fillStyle = colors.ink;
+    ctx.font = "bold 10px system-ui, sans-serif";
+    ctx.fillText("¿Cuánto se le marca al producto?", marginX + 14, py);
+    py += 18;
+    ctx.font = "9px system-ui, sans-serif";
+    ctx.fillStyle = colors.sub;
+    ctx.fillText(
+      markupMode === "multiplo" ? `Por múltiplo: x${multiplicador}` : `Por porcentaje: ${markupPct}%`,
+      marginX + 14,
+      py
+    );
+    py += 18;
+    roundRectPath(ctx, marginX + 14, py - 12, 240, 20, 4);
+    ctx.fillStyle = colors.terracottaSoft;
+    ctx.fill();
+    ctx.fillStyle = colors.terracotta;
+    ctx.font = "bold 8.5px system-ui, sans-serif";
+    ctx.fillText(`\u2212 Costo del producto: ${fmtARS(costoProducto)}`, marginX + 20, py + 2);
+    y = prodBoxY + prodBoxH + 18;
+
+    ctx.fillStyle = colors.sub;
+    ctx.font = "bold 8px system-ui, sans-serif";
+    ctx.fillText("OTROS COSTOS", marginX, y);
+    y += 10;
+
+    ensureSpace(60);
+    const q = (contentW - 3 * 12) / 4;
+    const yy1 = drawFieldCard(ctx, marginX, y, q, "Impuestos (4,5%)", fmtARS(impuestos), {
+      readOnly: true,
+      badge: `${fmtARS(impuestos)} por venta`,
+    });
+    const yy2 = drawFieldCard(
+      ctx,
+      marginX + (q + 12),
+      y,
+      q,
+      "Packaging",
+      fmtARS(packaging),
+      packaging > 0 ? { badge: `${fmtARS(packaging)} por venta` } : {}
+    );
+    const yy3 = drawFieldCard(
+      ctx,
+      marginX + 2 * (q + 12),
+      y,
+      q,
+      "Envío",
+      fmtARS(envio),
+      envio > 0 ? { badge: `${fmtARS(envio)} por venta` } : {}
+    );
+    const yy4 = drawFieldCard(
+      ctx,
+      marginX + 3 * (q + 12),
+      y,
+      q,
+      "Costo por compra (CPA)",
+      fmtARS(costoPorCompra),
+      costoPorCompra > 0 ? { badge: `${fmtARS(costoPorCompra)} por venta` } : {}
+    );
+    y = Math.max(yy1, yy2, yy3, yy4) + 22;
+
+    ensureSpace(30);
+    const statBlock = (x, label, value, color) => {
+      ctx.fillStyle = colors.sub;
+      ctx.font = "7.5px system-ui, sans-serif";
+      ctx.fillText(label.toUpperCase(), x, y);
+      ctx.fillStyle = color;
+      ctx.font = "bold 12px ui-monospace, Menlo, monospace";
+      ctx.fillText(value, x, y + 16);
+    };
+    const statW = contentW / 4;
+    statBlock(marginX, "Costos variables total", fmtARS(costosVariablesTotal), colors.terracotta);
+    statBlock(marginX + statW, "Ganancia por venta", fmtARS(ganancia), ganancia >= 0 ? colors.teal : colors.terracotta);
+    statBlock(marginX + statW * 2, "% de ganancia", fmtPct(margenPct), margenSano ? colors.teal : colors.terracotta);
+    statBlock(marginX + statW * 3, "Costo por compra breakeven", fmtARS(costoPorCompraBreakeven), colors.ink);
+    y += 30;
+
+    ctx.strokeStyle = colors.border;
+    ctx.beginPath();
+    ctx.moveTo(marginX, y);
+    ctx.lineTo(PAGE_W - marginX, y);
+    ctx.stroke();
+    y += 26;
+
+    // ---- Sección 2 ----
+    sectionHeader(2, "Escenario break even mensual");
+    ensureSpace(52 + 16 + 56);
+    y = drawFieldCard(ctx, marginX, y, 220, "Costos fijos mensuales", fmtARS(costosFijos)) + 16;
+
+    const s2H = 56;
+    roundRectPath(ctx, marginX, y, contentW, s2H, 8);
+    ctx.fillStyle = colors.tealSoft;
+    ctx.fill();
+    const s2W = contentW / 3;
+    [
+      ["ROAS MÍNIMO", fmtRoas(roasMinimo)],
+      ["VENTAS MÍNIMAS / MES", String(ventasNecesarias)],
+      ["FACTURACIÓN MÍNIMA", fmtARS(facturacionMinima)],
+    ].forEach(([label, val], i) => {
+      const x = marginX + i * s2W + 14;
+      ctx.fillStyle = colors.sub;
+      ctx.font = "7.5px system-ui, sans-serif";
+      ctx.fillText(label, x, y + 20);
+      ctx.fillStyle = colors.teal;
+      ctx.font = "bold 15px ui-monospace, Menlo, monospace";
+      ctx.fillText(val, x, y + 42);
+    });
+    y += s2H + 30;
+
+    // ---- Sección 3 ----
+    sectionHeader(3, "Objetivos de inversión");
+
+    const scenarioCard = (title, ventas, roasVal, data, toneColor, toneSoft) => {
+      const cardH = 240;
+      ensureSpace(cardH);
+      const cardY = y;
+      roundRectPath(ctx, marginX, cardY, contentW, cardH, 8);
+      ctx.strokeStyle = toneColor;
+      ctx.lineWidth = 1.3;
+      ctx.stroke();
+      let cy = cardY + 20;
+      ctx.fillStyle = colors.ink;
+      ctx.font = "bold 11px system-ui, sans-serif";
+      ctx.fillText(title, marginX + 14, cy);
+      cy += 16;
+
+      const fw = (contentW - 28 - 12) / 2;
+      drawFieldCard(ctx, marginX + 14, cy, fw, "Ventas objetivo", String(ventas));
+      drawFieldCard(ctx, marginX + 14 + fw + 12, cy, fw, "ROAS objetivo", fmtRoas(roasVal));
+      cy += 46;
+
+      ctx.strokeStyle = colors.border;
+      ctx.beginPath();
+      ctx.moveTo(marginX + 14, cy);
+      ctx.lineTo(PAGE_W - marginX - 14, cy);
+      ctx.stroke();
+      cy += 16;
+
+      // Resultados como recuadros de color, igual que el resumen de arriba.
+      const boxGapS = 8;
+      const boxWS = (contentW - 28 - boxGapS) / 2;
+      const boxHS = 32;
+      const drawResultBox = (bx, by, label, val) => {
+        roundRectPath(ctx, bx, by, boxWS, boxHS, 5);
+        ctx.fillStyle = toneSoft;
+        ctx.fill();
+        ctx.fillStyle = colors.sub;
+        ctx.font = "7px system-ui, sans-serif";
+        ctx.fillText(label.toUpperCase(), bx + 8, by + 12);
+        ctx.fillStyle = toneColor;
+        ctx.font = "bold 10.5px ui-monospace, Menlo, monospace";
+        ctx.fillText(val, bx + 8, by + 25);
+      };
+
+      const results = [
+        ["Facturación", fmtARS(data.facturacion)],
+        ["Inversión total", fmtARS(data.inversion)],
+        ["Inversión diaria", fmtARS(data.inversionDiaria)],
+        ["ROAS", fmtRoas(data.roas)],
+        ["Costo por compra", fmtARS(data.cpa)],
+      ];
+      results.forEach(([label, val], i) => {
+        const col = i % 2;
+        const row = Math.floor(i / 2);
+        const bx = marginX + 14 + col * (boxWS + boxGapS);
+        const by = cy + row * (boxHS + boxGapS);
+        drawResultBox(bx, by, label, val);
+      });
+
+      y = cardY + cardH + 16;
+    };
+
+    scenarioCard("Escenario mínimo rentable", ventasMin, roasMin, min, colors.amber, colors.amberSoft);
+    scenarioCard("Escenario ideal", ventasIdeal, roasIdeal, ideal, colors.teal, colors.tealSoft);
+
+    ensureSpace(20);
+    y += 8;
+    ctx.fillStyle = colors.sub;
+    ctx.font = "8px system-ui, sans-serif";
+    ctx.fillText(
+      "Herramienta orientativa de Monky Agency. Validar impuestos y comisiones reales con el contador del cliente.",
+      marginX,
+      y
+    );
+
+    return Math.floor(pageTop / PAGE_H) + 1;
+  };
+
+  // Comprime bytes RGB crudos como zlib (formato que espera /FlateDecode en un PDF).
+  const deflateBytes = async (bytes) => {
+    if (typeof CompressionStream === "undefined") return { bytes, compressed: false };
+    const cs = new CompressionStream("deflate");
+    const writer = cs.writable.getWriter();
+    writer.write(bytes);
+    writer.close();
+    const reader = cs.readable.getReader();
+    const chunks = [];
+    let total = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      total += value.length;
+    }
+    const out = new Uint8Array(total);
+    let pos = 0;
+    for (const c of chunks) {
+      out.set(c, pos);
+      pos += c.length;
+    }
+    return { bytes: out, compressed: true };
+  };
+
+  // Arma un PDF de N páginas a partir de N imágenes sin pérdida (RGB + FlateDecode).
+  const buildMultiPagePDF = (pages) => {
+    const enc = new TextEncoder();
+    const chunks = [];
+    let offset = 0;
+    const push = (data) => {
+      const bytes = typeof data === "string" ? enc.encode(data) : data;
+      chunks.push(bytes);
+      offset += bytes.length;
+      return offset;
+    };
+
+    const totalObjects = 2 + pages.length * 3;
+    const offsets = new Array(totalObjects + 1).fill(0);
+
+    push("%PDF-1.4\n");
+
+    offsets[1] = offset;
+    push("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+
+    const kids = pages.map((_, i) => `${3 + i * 3} 0 R`).join(" ");
+    offsets[2] = offset;
+    push(`2 0 obj\n<< /Type /Pages /Kids [${kids}] /Count ${pages.length} >>\nendobj\n`);
+
+    pages.forEach((p, i) => {
+      const pageObjNum = 3 + i * 3;
+      const contentObjNum = pageObjNum + 1;
+      const imageObjNum = pageObjNum + 2;
+
+      offsets[pageObjNum] = offset;
+      push(
+        `${pageObjNum} 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << /XObject << /Im0 ${imageObjNum} 0 R >> >> /MediaBox [0 0 ${p.pageW} ${p.pageH}] /Contents ${contentObjNum} 0 R >>\nendobj\n`
+      );
+
+      const contentStream = `q ${p.pageW} 0 0 ${p.pageH} 0 0 cm /Im0 Do Q`;
+      offsets[contentObjNum] = offset;
+      push(`${contentObjNum} 0 obj\n<< /Length ${contentStream.length} >>\nstream\n${contentStream}\nendstream\nendobj\n`);
+
+      const filterEntry = p.compressed ? " /Filter /FlateDecode" : "";
+      offsets[imageObjNum] = offset;
+      push(
+        `${imageObjNum} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${p.imgW} /Height ${p.imgH} /ColorSpace /DeviceRGB /BitsPerComponent 8${filterEntry} /Length ${p.imgBytes.length} >>\nstream\n`
+      );
+      push(p.imgBytes);
+      push("\nendstream\nendobj\n");
+    });
+
+    const xrefStart = offset;
+    let xref = `xref\n0 ${totalObjects + 1}\n0000000000 65535 f \n`;
+    for (let i = 1; i <= totalObjects; i++) {
+      xref += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
+    }
+    xref += `trailer\n<< /Size ${totalObjects + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+    push(xref);
+
+    const total = new Uint8Array(offset);
+    let pos = 0;
+    for (const c of chunks) {
+      total.set(c, pos);
+      pos += c.length;
+    }
+    return total;
+  };
+
+  const handleExportPDF = async () => {
+    try {
+      setStatusMsg("Generando PDF...");
+
+      // 1) Medición: cuántas páginas hacen falta, sin dibujar nada real.
+      const measureCanvas = document.createElement("canvas");
+      measureCanvas.width = 2;
+      measureCanvas.height = 2;
+      const totalPages = renderReport(measureCanvas.getContext("2d"));
+
+      // 2) Canvas final, del tamaño justo (evita canvases gigantes que
+      //    algunos navegadores dejan en blanco).
+      const scale = 2.5;
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(PAGE_W * scale);
+      canvas.height = Math.round(totalPages * PAGE_H * scale);
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.scale(scale, scale);
+      renderReport(ctx);
+
+      // 3) Cada página, como imagen RGB sin pérdida.
+      const pages = [];
+      const sliceHpx = Math.round(PAGE_H * scale);
+      for (let i = 0; i < totalPages; i++) {
+        const imgData = ctx.getImageData(0, i * sliceHpx, canvas.width, sliceHpx);
+        const src = imgData.data;
+        const rgb = new Uint8Array(canvas.width * sliceHpx * 3);
+        for (let px = 0, j = 0; px < src.length; px += 4, j += 3) {
+          rgb[j] = src[px];
+          rgb[j + 1] = src[px + 1];
+          rgb[j + 2] = src[px + 2];
+        }
+        const { bytes: imgBytes, compressed } = await deflateBytes(rgb);
+        pages.push({
+          imgBytes,
+          compressed,
+          pageW: PAGE_W,
+          pageH: PAGE_H,
+          imgW: canvas.width,
+          imgH: sliceHpx,
+        });
+      }
+
+      const pdfBytes = buildMultiPagePDF(pages);
+      const blob = new Blob([pdfBytes], { type: "application/pdf" });
+      const filename = `Calculadora-de-Margen${cliente ? "-" + cliente : ""}.pdf`;
+
+      if (downloadsApi) {
+        await downloadsApi.save({ filename, data: blob });
+        setStatusMsg("PDF descargado.");
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        setStatusMsg("PDF descargado.");
+      }
+    } catch (e) {
+      console.error(e);
+      setStatusMsg("No se pudo generar el PDF. Probá de nuevo.");
+    }
+  };
+
+  const margenSano = margenPct >= 20;
+  const multiplos = [2, 2.5, 3, 3.5];
+
+  return (
+    <div
+      className="min-h-screen w-full py-14 px-5"
+      style={{ backgroundColor: colors.bg, color: colors.ink, fontFamily: FONT }}
+    >
+      <div className="max-w-5xl mx-auto">
+        {/* Header */}
+        <div className="mb-10">
+          <span className="text-[13px] font-medium" style={{ color: colors.teal }}>
+            Monky Agency
+          </span>
+          <h1
+            className="text-[34px] mt-1"
+            style={{ fontFamily: FONT, fontWeight: 700, letterSpacing: "-0.02em" }}
+          >
+            Calculadora de Margen
+          </h1>
+          <p className="text-[15px] mt-2.5 max-w-xl leading-relaxed" style={{ color: colors.sub }}>
+            Completala junto al cliente para saber, en base a sus costos reales, cuál es
+            su margen de ganancia, el ROAS mínimo para no perder plata y la facturación
+            necesaria cada mes.
+          </p>
+          <div className="mt-6 flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-medium" style={{ color: colors.ink }}>Cliente</span>
+              <input
+                value={cliente}
+                onChange={(e) => setCliente(e.target.value)}
+                placeholder="Nombre de la marca"
+                className="rounded-xl px-3.5 py-2.5 outline-none w-48 text-[15px] transition-shadow focus:ring-2"
+                style={{ border: `1px solid ${colors.border}`, backgroundColor: colors.surfaceMuted, "--tw-ring-color": `${colors.teal}55` }}
+              />
+            </label>
+
+            <button
+              type="button"
+              onClick={handleGuardar}
+              className="no-print text-[14px] font-medium px-5 py-2.5 rounded-full transition-opacity hover:opacity-90"
+              style={{ backgroundColor: colors.teal, color: "#fff" }}
+            >
+              Guardar cliente
+            </button>
+
+            <label className="no-print flex flex-col gap-1.5">
+              <span className="text-[13px] font-medium" style={{ color: colors.ink }}>Cargar guardado</span>
+              <select
+                value=""
+                onChange={(e) => e.target.value && handleCargar(e.target.value)}
+                className="rounded-xl px-3.5 py-2.5 outline-none w-48 text-[15px]"
+                style={{ border: `1px solid ${colors.border}`, backgroundColor: colors.surfaceMuted }}
+              >
+                <option value="">Seleccionar cliente...</option>
+                {savedClients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <button
+              type="button"
+              onClick={handleExportPDF}
+              className="no-print text-[14px] font-medium px-5 py-2.5 rounded-full transition-opacity hover:opacity-70"
+              style={{ border: `1px solid ${colors.border}`, color: colors.ink, backgroundColor: colors.surface }}
+            >
+              Exportar a PDF
+            </button>
+          </div>
+          {statusMsg && (
+            <p className="no-print text-[13px] mt-3" style={{ color: colors.teal }}>
+              {statusMsg}
+            </p>
+          )}
+          {dbIsLocal && (
+            <p className="no-print text-[12px] mt-2" style={{ color: colors.sub }}>
+              Guardado local a este navegador (no se comparte con el resto del equipo).
+            </p>
+          )}
+        </div>
+
+        {/* Resumen fijo */}
+        <div
+          className="rounded-2xl p-6 mb-10 grid grid-cols-2 sm:grid-cols-4 gap-6"
+          style={{
+            backgroundColor: margenSano ? colors.tealSoft : colors.terracottaSoft,
+          }}
+        >
+          <Stat label="Margen de ganancia" value={fmtPct(margenPct)} tone={margenSano ? "teal" : "terracotta"} big />
+          <Stat label="ROAS mínimo" value={fmtRoas(roasMinimo)} tone={margenSano ? "teal" : "terracotta"} big />
+          <Stat label="Ventas mínimas / mes" value={ventasNecesarias} tone={margenSano ? "teal" : "terracotta"} big />
+          <Stat label="Facturación mínima" value={fmtARS(facturacionMinima)} tone={margenSano ? "teal" : "terracotta"} big />
+        </div>
+
+        {/* Paso 1 */}
+        <section
+          className="rounded-2xl p-7 mb-8"
+          style={{ backgroundColor: colors.surface, border: `1px solid ${colors.border}`, boxShadow: SHADOW }}
+        >
+          <SectionHeader
+            n={1}
+            title="Margen por venta"
+            desc="Cuánta plata le queda a la marca por cada venta, una vez descontados todos sus costos."
+          />
+
+          <div className="max-w-xs mb-2">
+            <NumField
+              label="Ticket promedio"
+              value={ticket}
+              onChange={setTicket}
+              hint="Precio al que se vende el producto o pedido en promedio."
+            />
+          </div>
+
+          <SubLabel>Comisiones (el IVA se suma solo)</SubLabel>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <NumField
+              label="Comisión pasarela de pago"
+              value={comisionPasarelaPct}
+              onChange={setComisionPasarelaPct}
+              unit="%"
+              hint="Lo que cobra el medio de pago (Mercado Pago, Todo Pago, etc.) por procesar la venta."
+              resultText={
+                comisionPasarelaPct > 0
+                  ? `${fmtARS(comisionPasarelaARS)} comisión + ${fmtARS(ivaComisionPasarela)} IVA = ${fmtARS(totalPasarela)}`
+                  : ""
+              }
+            />
+            <NumField
+              label="Comisión cuotas sin interés"
+              value={comisionCuotasPct}
+              onChange={setComisionCuotasPct}
+              unit="%"
+              hint="Costo adicional por ofrecerle cuotas sin interés al comprador."
+              resultText={
+                comisionCuotasPct > 0
+                  ? `${fmtARS(comisionCuotasARS)} comisión + ${fmtARS(ivaCuotas)} IVA = ${fmtARS(totalCuotas)}`
+                  : ""
+              }
+            />
+          </div>
+
+          <div className="mt-4">
+            <span className="text-sm" style={{ color: colors.ink }}>
+              Comisión Tienda Nube (2%)
+            </span>
+            <p className="text-xs leading-snug mt-0.5" style={{ color: colors.sub }}>
+              Comisión de la plataforma cuando el cliente no usa Pago Nube como único medio de cobro.
+            </p>
+            <div className="flex items-center gap-3 mt-2">
+              <label
+                className="flex items-center gap-2 rounded-xl px-3.5 py-2.5 cursor-pointer w-fit"
+                style={{ border: `1px solid ${colors.border}`, backgroundColor: colors.surfaceMuted }}
+              >
+                <input
+                  type="checkbox"
+                  checked={usaTiendaNube}
+                  onChange={(e) => setUsaTiendaNube(e.target.checked)}
+                />
+                <span className="text-[14px]" style={{ color: colors.ink }}>
+                  {usaTiendaNube ? "Se aplica" : "No aplica (usa Pago Nube)"}
+                </span>
+              </label>
+              {usaTiendaNube && (
+                <span
+                  className="text-[13px] font-medium rounded-lg px-2.5 py-1.5"
+                  style={{ color: colors.terracotta, backgroundColor: colors.terracottaSoft }}
+                >
+                  − {fmtARS(comisionTiendaNube)}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <SubLabel>Producto</SubLabel>
+          <div className="rounded-2xl p-5" style={{ border: `1px solid ${colors.border}`, backgroundColor: colors.surfaceMuted }}>
+            <p className="text-[14px] font-medium mb-1" style={{ color: colors.ink }}>
+              ¿Cuánto se le marca al producto?
+            </p>
+            <p className="text-[13px] leading-relaxed mb-4" style={{ color: colors.sub }}>
+              Es cuánto multiplica (o suma) la marca sobre el costo del producto para definir su precio de venta.
+            </p>
+            <div className="flex gap-2 mb-4">
+              <button
+                type="button"
+                onClick={() => setMarkupMode("multiplo")}
+                className="text-[13px] font-medium px-3.5 py-1.5 rounded-full transition-colors"
+                style={{
+                  backgroundColor: markupMode === "multiplo" ? colors.teal : "transparent",
+                  color: markupMode === "multiplo" ? "#fff" : colors.sub,
+                  border: `1px solid ${markupMode === "multiplo" ? colors.teal : colors.border}`,
+                }}
+              >
+                Por múltiplo (x2, x3...)
+              </button>
+              <button
+                type="button"
+                onClick={() => setMarkupMode("porcentaje")}
+                className="text-[13px] font-medium px-3.5 py-1.5 rounded-full transition-colors"
+                style={{
+                  backgroundColor: markupMode === "porcentaje" ? colors.teal : "transparent",
+                  color: markupMode === "porcentaje" ? "#fff" : colors.sub,
+                  border: `1px solid ${markupMode === "porcentaje" ? colors.teal : colors.border}`,
+                }}
+              >
+                Por porcentaje (%)
+              </button>
+            </div>
+
+            {markupMode === "multiplo" ? (
+              <div>
+                <div className="flex gap-2 mb-3 flex-wrap">
+                  {multiplos.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setMultiplicador(m)}
+                      className="text-[13px] font-medium px-3.5 py-1.5 rounded-full transition-colors"
+                      style={{
+                        fontFamily: MONO,
+                        backgroundColor: multiplicador === m ? colors.teal : colors.surface,
+                        color: multiplicador === m ? "#fff" : colors.ink,
+                        border: `1px solid ${multiplicador === m ? colors.teal : colors.border}`,
+                      }}
+                    >
+                      x{m}
+                    </button>
+                  ))}
+                </div>
+                <div className="max-w-[160px]">
+                  <NumField
+                    label="Múltiplo personalizado"
+                    value={multiplicador}
+                    onChange={setMultiplicador}
+                    unit="x"
+                    resultText={`Costo del producto: ${fmtARS(costoProducto)}`}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="max-w-[200px]">
+                <NumField
+                  label="% de marca sobre el costo"
+                  value={markupPct}
+                  onChange={setMarkupPct}
+                  unit="%"
+                  resultText={`Costo del producto: ${fmtARS(costoProducto)}`}
+                />
+              </div>
+            )}
+          </div>
+
+          <SubLabel>Otros costos</SubLabel>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <NumField
+              label="Impuestos (4,5% automático)"
+              value={impuestos}
+              readOnly
+              hint="Impuestos que se pagan sobre cada venta. Se calcula solo sobre el ticket promedio."
+              resultText={`${fmtARS(impuestos)} por venta`}
+            />
+            <NumField
+              label="Packaging"
+              value={packaging}
+              onChange={setPackaging}
+              hint="Costo de cajas, bolsas o materiales para embalar el producto."
+              resultText={packaging > 0 ? `${fmtARS(packaging)} por venta` : ""}
+            />
+            <NumField
+              label="Envío"
+              value={envio}
+              onChange={setEnvio}
+              hint="Costo de envío que asume la marca, si no lo paga el comprador."
+              resultText={envio > 0 ? `${fmtARS(envio)} por venta` : ""}
+            />
+            <NumField
+              label="Costo por compra (CPA)"
+              value={costoPorCompra}
+              onChange={setCostoPorCompra}
+              hint="Lo que le cuesta hoy a la marca conseguir una venta a través de la publicidad."
+              resultText={costoPorCompra > 0 ? `${fmtARS(costoPorCompra)} por venta` : ""}
+            />
+          </div>
+
+          <div
+            className="grid sm:grid-cols-4 gap-5 mt-8 pt-6"
+            style={{ borderTop: `1px solid ${colors.border}` }}
+          >
+            <Stat label="Costos variables total" value={fmtARS(costosVariablesTotal)} tone="terracotta" />
+            <Stat label="Ganancia por venta" value={fmtARS(ganancia)} tone={ganancia >= 0 ? "teal" : "terracotta"} />
+            <Stat label="% de ganancia" value={fmtPct(margenPct)} tone={margenSano ? "teal" : "terracotta"} />
+            <Stat label="Costo por compra breakeven" value={fmtARS(costoPorCompraBreakeven)} />
+          </div>
+        </section>
+
+        <div className="flex flex-col gap-8 mb-8">
+        {/* Paso 2 */}
+        <section
+          className="rounded-2xl p-7"
+          style={{ backgroundColor: colors.surface, border: `1px solid ${colors.border}`, boxShadow: SHADOW }}
+        >
+          <SectionHeader
+            n={2}
+            title="Escenario break even mensual"
+            desc="El piso que necesita el cliente: cuánto tiene que vender y facturar por mes solo para cubrir sus costos, sin ganar ni perder."
+          />
+          <div className="max-w-xs mb-6">
+            <NumField
+              label="Costos fijos mensuales"
+              value={costosFijos}
+              onChange={setCostosFijos}
+              hint="Gastos que la marca tiene todos los meses, más allá de cuánto venda: Tienda Nube, Community Manager, contador, alquiler, etc."
+            />
+          </div>
+          <div className="grid sm:grid-cols-3 gap-5 p-5 rounded-2xl" style={{ backgroundColor: colors.tealSoft }}>
+            <Stat label="ROAS mínimo" value={fmtRoas(roasMinimo)} tone="teal" big />
+            <Stat label="Ventas mínimas / mes" value={ventasNecesarias} tone="teal" big />
+            <Stat label="Facturación mínima" value={fmtARS(facturacionMinima)} tone="teal" big />
+          </div>
+        </section>
+
+        {/* Paso 3 */}
+        <section
+          className="rounded-2xl p-7"
+          style={{ backgroundColor: colors.surface, border: `1px solid ${colors.border}`, boxShadow: SHADOW }}
+        >
+          <SectionHeader
+            n={3}
+            title="Objetivos de inversión"
+            desc="Cuánto invertir en publicidad para llegar a un número de ventas, según el ROAS que se apunte a lograr. El ROAS es cuánto se factura por cada peso invertido en publicidad."
+          />
+
+          <div className="flex flex-col gap-5">
+            {[
+              {
+                label: "Escenario mínimo rentable",
+                ventas: ventasMin,
+                setVentas: setVentasMin,
+                roas: roasMin,
+                setRoas: setRoasMin,
+                data: min,
+                tone: "amber",
+              },
+              {
+                label: "Escenario ideal",
+                ventas: ventasIdeal,
+                setVentas: setVentasIdeal,
+                roas: roasIdeal,
+                setRoas: setRoasIdeal,
+                data: ideal,
+                tone: "teal",
+              },
+            ].map((s) => (
+              <div
+                key={s.label}
+                className="rounded-2xl p-5"
+                style={{ border: `1px solid ${colors.border}`, backgroundColor: colors.surfaceMuted }}
+              >
+                <h3 className="text-[14px] font-semibold mb-4" style={{ color: colors.ink }}>
+                  {s.label}
+                </h3>
+                <div className="grid grid-cols-2 gap-3 mb-2">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-[12px]" style={{ color: colors.sub }}>
+                      Ventas objetivo
+                    </span>
+                    <input
+                      type="number"
+                      value={s.ventas}
+                      onChange={(e) => s.setVentas(parseFloat(e.target.value) || 0)}
+                      className="rounded-lg px-2.5 py-1.5 text-right outline-none"
+                      style={{
+                        border: `1px solid ${colors.border}`,
+                        backgroundColor: colors.surface,
+                        fontFamily: MONO,
+                      }}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-[12px]" style={{ color: colors.sub }}>
+                      ROAS objetivo
+                    </span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={s.roas}
+                      onChange={(e) => s.setRoas(parseFloat(e.target.value) || 0)}
+                      className="rounded-lg px-2.5 py-1.5 text-right outline-none"
+                      style={{
+                        border: `1px solid ${colors.border}`,
+                        backgroundColor: colors.surface,
+                        fontFamily: MONO,
+                      }}
+                    />
+                  </label>
+                </div>
+                {s.label === "Escenario mínimo rentable" && roasMinimo > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setRoasMin(Number(roasMinimo.toFixed(2)))}
+                    className="text-[12px] mb-4"
+                    style={{ color: colors.teal }}
+                  >
+                    Usar el ROAS mínimo calculado arriba ({fmtRoas(roasMinimo)})
+                  </button>
+                )}
+                <div className="pt-4" style={{ borderTop: `1px solid ${colors.border}` }}>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <StatBox label="Facturación" value={fmtARS(s.data.facturacion)} tone={s.tone} />
+                    <StatBox label="Inversión total" value={fmtARS(s.data.inversion)} tone={s.tone} />
+                    <StatBox label="Inversión diaria" value={fmtARS(s.data.inversionDiaria)} tone={s.tone} />
+                    <StatBox label="ROAS" value={fmtRoas(s.data.roas)} tone={s.tone} />
+                    <StatBox label="Costo por compra" value={fmtARS(s.data.cpa)} tone={s.tone} />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+        </div>
+
+        <p className="text-[13px] mt-10 text-center" style={{ color: colors.sub }}>
+          Herramienta orientativa. Antes de presentarle el número al cliente, validá los
+          impuestos y comisiones reales con su contador.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<BreakEvenApp />);
+</script>
+</body>
+</html>
